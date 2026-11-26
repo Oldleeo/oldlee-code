@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": [
+          "OLDLEECODE.dev.oldlee.code",
+          "OLDLEECODE.dev.oldlee.code.preview",
+          "OLDLEECODE.dev.oldlee.code.dev"
+        ],
+        "components": [{ "/": "/threads/*" }]
+      }
+    ]
+  }
+}
