@@ -1,0 +1,90 @@
+# Manual Windows desktop build on a GitHub-hosted runner. Produces an unsigned
+# NSIS installer (.exe) and a portable zip, uploaded as a run artifact.
+#
+#   gh workflow run windows-build.yml -f version=0.1.12
+#   gh run watch
+#   gh run download <run-id> -n oldlee-code-windows-x64
+name: Windows Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Desktop build version"
+        type: string
+        default: "0.1.12"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Windows x64 (unsigned)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Enable long paths
+        shell: pwsh
+        run: git config --system core.longpaths true
+
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+        with:
+          sparse-checkout: |
+            /*
+            !/.repos/
+          sparse-checkout-cone-mode: false
+
+      - name: Setup Vite+
+        uses: voidzero-dev/setup-vp@250f29ce396baf5e8f24498e17c0dfdebabc26eb # v1.15.0
+        with:
+          node-version-file: package.json
+          cache: false
+          run-install: false
+
+      - name: Install dependencies
+        run: vp install
+
+      - name: Ensure Spectre-mitigated MSVC libraries
+        shell: pwsh
+        run: |
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          $install = & $vswhere -latest -products * -property installationPath
+          $toolset = Get-ChildItem (Join-Path $install 'VC\Tools\MSVC') -Directory | Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
+          if (Test-Path (Join-Path $toolset.FullName 'lib\spectre\x64')) {
+            Write-Host "Spectre x64 libraries already present."
+            exit 0
+          }
+          Write-Host "Installing Spectre x64 libraries..."
+          $setup = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\setup.exe'
+          Start-Process -FilePath $setup -Wait -ArgumentList @(
+            'modify', '--installPath', "`"$install`"",
+            '--add', 'Microsoft.VisualStudio.Component.VC.Runtimes.x86.x64.Spectre',
+            '--quiet', '--norestart', '--noUpdateInstaller')
+          if (!(Test-Path (Join-Path $toolset.FullName 'lib\spectre\x64'))) { throw "Spectre libraries still missing" }
+
+      - name: Add Rust target
+        run: rustup target add x86_64-pc-windows-msvc
+
+      - name: Build installer (NSIS)
+        shell: bash
+        run: vp run dist:desktop:artifact --platform win --target nsis --arch x64 --build-version "${{ inputs.version }}" --verbose
+
+      - name: Build portable zip
+        shell: bash
+        run: vp run dist:desktop:artifact --platform win --target zip --arch x64 --build-version "${{ inputs.version }}" --skip-build --verbose
+
+      - name: List output
+        shell: pwsh
+        run: Get-ChildItem -Recurse release -File | Select-Object FullName, Length | Format-Table -AutoSize
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: oldlee-code-windows-x64
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.blockmap
+            release/*.yml
+          if-no-files-found: error
