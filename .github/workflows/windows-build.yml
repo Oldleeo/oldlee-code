@@ -68,10 +68,14 @@ jobs:
 
       - name: Build installer (NSIS)
         shell: bash
+        env:
+          T3CODE_WINDOWS_PAYLOAD_FILE_LIMIT: "300"
         run: vp run dist:desktop:artifact --platform win --target nsis --arch x64 --build-version "${{ inputs.version }}" --verbose
 
       - name: Build portable zip
         shell: bash
+        env:
+          T3CODE_WINDOWS_PAYLOAD_FILE_LIMIT: "300"
         run: vp run dist:desktop:artifact --platform win --target zip --arch x64 --build-version "${{ inputs.version }}" --skip-build --verbose
 
       - name: List output

@@ -3383,7 +3383,14 @@ export const validateWindowsPackagedPayload = Effect.fn(
 }) {
   const fs = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
-  const fileLimit = input.fileLimit ?? WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT;
+  // Hygiene guard, not a runtime requirement. T3CODE_WINDOWS_PAYLOAD_FILE_LIMIT raises it
+  // for builds on runners whose Electron/native payload is larger than the original baseline.
+  const envFileLimit = Number.parseInt(process.env.T3CODE_WINDOWS_PAYLOAD_FILE_LIMIT ?? "", 10);
+  const fileLimit =
+    input.fileLimit ??
+    (Number.isFinite(envFileLimit) && envFileLimit > 0
+      ? envFileLimit
+      : WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT);
   const isFile = (filePath: string) =>
     fs.stat(filePath).pipe(
       Effect.map((stat) => stat.type === "File"),
