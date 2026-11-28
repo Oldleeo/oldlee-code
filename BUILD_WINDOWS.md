@@ -78,21 +78,21 @@ vp run test             # 全部测试
 在 Windows 上，仓库根目录执行：
 
 ```powershell
-vp run dist:desktop:win:x64 -- --build-version 0.1.12 --verbose
+vp run dist:desktop:artifact --platform win --target nsis --arch x64 --build-version 0.1.12 --verbose
 ```
 
-等价于：
+产物在 `release\`：`Oldlee-Code-0.1.12-x64.exe`（NSIS 安装程序，约 206 MB）。装好后主程序叫 `Oldlee Code (Beta).exe`。版本号取自 `apps/desktop/package.json`（当前 0.1.12）。
+
+打包脚本在 Windows 主机上还会真的启动一次打好的程序做自检。有一道「Windows 包文件数不超过 80」的检查，在当前依赖下实际是 104 到 106 个文件，会报错。所以打包时要设环境变量放宽（工作流里已经设了）：
 
 ```powershell
-node scripts/build-desktop-artifact.ts --platform win --target nsis --arch x64 --build-version 0.1.12
+$env:T3CODE_WINDOWS_PAYLOAD_FILE_LIMIT = "300"
 ```
-
-产物在 `release\`，文件名形如 `Oldlee-Code-<版本>-x64.exe`（NSIS 安装程序）。
 
 再出一个免安装 zip（要先成功跑过上一步，用 `--skip-build` 复用构建结果）：
 
 ```powershell
-node scripts/build-desktop-artifact.ts --platform win --target zip --arch x64 --build-version 0.1.12 --skip-build
+vp run dist:desktop:artifact --platform win --target zip --arch x64 --build-version 0.1.12 --skip-build
 ```
 
 打包脚本会在构建时检查 Windows 包的结构、原生模块能否加载等。缺 Rust、Python、MSVC 或 Spectre 库时，它会列出缺哪一项。
@@ -149,7 +149,9 @@ gh run download <run-id> -n oldlee-code-windows-x64
 
 - 未签名，会有 SmartScreen 警告。
 - Oldlee Connect（账号登录、中继）依赖上游托管服务，本项目没有运营这些服务。局域网配对和 Tailscale 不受影响。要用 Connect，得自己配 Clerk 和中继，见 `.env.example` 和 `infra/relay`。
-- 自动更新指向的发布源还没有真实发布，安装版里的更新检查不会找到新版本。
+- 自动更新用的是 electron-builder 的 GitHub 发布源，这个仓库还没有 Releases，更新检查找不到新版本。
+- 打包脚本里写死了作者 `T3 Tools`（`scripts/build-desktop-artifact.ts` 里 `author: "T3 Tools"`），会出现在包内 `package.json` 里。要改成自己的名字，改这一处再重新打包。
+- 软件名目前是 `Oldlee Code (Beta)`，安装包文件名是 `Oldlee-Code-<版本>-x64.exe`，由 `artifactName` 和 `productName` 决定。
 - 这个 Windows 包没有内置 WSL 运行时（没传 `--wsl-runtime`）。在 Windows 本机直接用代理没问题，要走 WSL 后端，需要另外提供 Linux 命令行压缩包，见 `docs/operations/03_release.md`。
 - 代理本身（Claude Code、Codex 等）要自己装好并登录，软件只负责驱动它们。
 - 系统里的 `.env` 不要放服务器密钥。仓库里没有任何密钥或令牌。
